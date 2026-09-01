@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import "./globals.css";
 
@@ -21,6 +22,22 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </div>
         </header>
         {children}
+        <footer className="site-footer">
+          <div className="shell footer-inner">
+            <span className="footer-title">Incident Reference Database</span>
+            <div className="creator">
+              <Image className="creator-avatar" src="/creator/avatar.jpeg" alt="Masashi" width={36} height={36} />
+              <div>
+                <span className="creator-label">Created and maintained by</span>
+                <span className="creator-links">
+                  <span>Masashi</span>
+                  <span aria-hidden="true">·</span>
+                  <a href="https://www.linkedin.com/in/masashi-saisho-22607ba8/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                </span>
+              </div>
+            </div>
+          </div>
+        </footer>
       </body>
     </html>
   );
