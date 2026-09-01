@@ -14,6 +14,8 @@ const FILTERABLE_CATEGORIES: TagCategory[] = ["facility_type", "industry"];
 type IncidentRow = {
   id: string; document_id: string; title: string | null; start_page: number; end_page: number;
   incident_date: string | null; location: string | null;
+  fatality_count?: number | null; serious_injury_count?: number | null; property_damage_musd?: number | null;
+  metadata: Record<string, unknown> | null;
   documents: DocumentSummary | DocumentSummary[];
 };
 
@@ -51,18 +53,25 @@ export async function GET(request: NextRequest) {
       if (!eligibleIds.size) return NextResponse.json({ items: [], total: 0, page, pageSize: PAGE_SIZE, sort, dir });
     }
 
-    let query = supabase
-      .from("incidents")
-      .select("id,document_id,title,start_page,end_page,incident_date,location,documents!inner(id,title,source_type,year)");
-    if (source) query = query.eq("documents.source_type", source);
-    if (eligibleIds) query = query.in("id", [...eligibleIds]);
-    const { data, error } = await query;
+    const selectBase = "id,document_id,title,start_page,end_page,incident_date,location,metadata,documents!inner(id,title,source_type,year)";
+    const promotedSelect = "id,document_id,title,start_page,end_page,incident_date,location,metadata,fatality_count,serious_injury_count,property_damage_musd,documents!inner(id,title,source_type,year)";
+    const applyFilters = (query: any) => {
+      if (source) query = query.eq("documents.source_type", source);
+      if (eligibleIds) query = query.in("id", [...eligibleIds]);
+      return query;
+    };
+    let query = applyFilters(supabase.from("incidents").select(promotedSelect));
+    let result = await query;
+    if (result.error) result = await applyFilters(supabase.from("incidents").select(selectBase));
+    const { data, error } = result;
     if (error) throw error;
 
     const rows = (data ?? []) as unknown as IncidentRow[];
     const items = rows.map((row) => {
       const document = documentOf(row.documents);
       const { city, state } = splitLocation(row.location);
+      const event = (row.metadata?.accidental_release_event ?? {}) as Record<string, unknown>;
+      const numeric = (value: unknown) => typeof value === "number" ? value : null;
       return {
         incidentId: row.id,
         title: row.title ?? "Untitled incident",
@@ -75,11 +84,9 @@ export async function GET(request: NextRequest) {
         incidentDate: row.incident_date,
         city,
         state,
-        // Not present in the `incidents` table schema; left null rather than
-        // derived from the AI human_consequence taxonomy tag.
-        fatalityCount: null as number | null,
-        seriousInjuryCount: null as number | null,
-        propertyDamageMillion: null as number | null,
+        fatalityCount: row.fatality_count ?? numeric(event.fatality),
+        seriousInjuryCount: row.serious_injury_count ?? numeric(event.serious_injury),
+        propertyDamageMillion: row.property_damage_musd ?? numeric(event.substantial_property_damage_musd),
       };
     });
 
